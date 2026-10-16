@@ -14,16 +14,18 @@ const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY,
 });
 
-async function main() {
+app.use(express.json());
+
+// async function main() {
 
 // By default, the model will generate entire response at once. If you want to stream the response, you can use the generateContentStream method.
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash-lite",
-    contents: "Who are you?",
-  });
+  // const response = await ai.models.generateContent({
+  //   model: "gemini-3.5-flash-lite",
+  //   contents: "Who are you?",
+  // });
 
-  console.log(response.text);
+  // console.log(response.text);
 
   
   // If you want to stream the response, you can use the generateContentStream method instead of generateContent.
@@ -36,9 +38,26 @@ async function main() {
 //   for await (const chunk of responseStream) {
 //     console.log(chunk.text);
 //   }
-}
+// }
 
-main();
+// main();
+
+
+
+
+
+//project
+
+app.post("/chat", async (req, res) =>{
+  const {prompt} = req.body;
+
+  const result = await ai.models.generateContent({
+    model: "gemini-3.5-flash-lite",
+    contents: prompt,
+  })
+
+  return res.json(result.text);
+})
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
