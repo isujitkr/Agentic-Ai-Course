@@ -6,6 +6,8 @@ import { TavilySearch } from "@langchain/tavily";
 import { createAgent } from "langchain";
 import { tool } from '@langchain/core/tools';
 import z from 'zod/v3';
+import { ToolNode } from "@langchain/langgraph/prebuilt";
+import { MessagesAnnotation, StateGraph } from '@langchain/langgraph';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,30 +54,86 @@ const customToolEmail = tool(
   }
 )
 
+// const llModel = new ChatGoogle({
+//       apiKey: process.env.GEMINI_API_KEY,
+//       model: "gemini-3.5-flash-lite",
+// });
+
+// app.post("/chat", async (req, res) =>{
+//     const {prompt} = req.body;
+    
+//     const agent = createAgent({
+//       model: llModel,
+//       tools: [tavilySearchTool, customToolAddition, customToolEmail],
+//     });
+
+//     const result = await agent.invoke({
+//       messages:[
+//         {
+//           role: "user",
+//           content: prompt,
+//         }
+//       ]
+//     })
+    
+//     return res.json(result.messages[result.messages.length - 1].content);
+// })
+
+//LangGraph
+
+const tools = [tavilySearchTool, customToolAddition, customToolEmail];
+
 const llModel = new ChatGoogle({
       apiKey: process.env.GEMINI_API_KEY,
       model: "gemini-3.5-flash-lite",
-});
+}).bindTools(tools);
+
+const toolNode = new ToolNode(tools);
+
+const agent = async (state) =>{
+    const result = await llModel.invoke(
+      state.messages
+    )
+
+    return {
+      messages: [result]
+    }
+}
+
+const shouldContinue = (state) =>{
+
+   if(state.messages[state.messages.length - 1].tool_calls.length > 0) {
+     return "tools";
+   }
+   return "__ end__";
+}
+
+//built in state graph for messages
+const graph = new StateGraph(MessagesAnnotation)
+  .addNode("agent", agent)
+  .addNode("tools", toolNode)
+  .addEdge("__start__", "agent")
+  .addConditionalEdges(
+    "agent",
+    shouldContinue,
+  )
+  .addEdge("tools", "agent")
+  .compile();
 
 app.post("/chat", async (req, res) =>{
     const {prompt} = req.body;
     
-    const agent = createAgent({
-      model: llModel,
-      tools: [tavilySearchTool, customToolAddition, customToolEmail],
-    });
-
-    const result = await agent.invoke({
-      messages:[
+    const result = await graph.invoke({
+      messages: [
         {
           role: "user",
-          content: prompt,
+          content: prompt
         }
       ]
-    })
-    
+    });
+
     return res.json(result.messages[result.messages.length - 1].content);
-})
+});
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
