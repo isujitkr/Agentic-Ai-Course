@@ -4,6 +4,8 @@ dotenv.config();
 import { ChatGoogle } from "@langchain/google";
 import { TavilySearch } from "@langchain/tavily";
 import { createAgent } from "langchain";
+import { tool } from '@langchain/core/tools';
+import z from 'zod/v3';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +24,34 @@ const tavilySearchTool = new TavilySearch({
   topic: "general",
 });
 
+const customToolAddition = tool(
+  ({a,b})=>{
+    return `Custom tool result: ${a} + ${b} = ${a+b}`;
+  },
+  {
+    name: "Addition_tool",
+    description: "Use this tool for addition of two numbers",
+    schema: z.object({
+      a: z.number(),
+      b: z.number(),
+    }),
+  }
+);
+
+const customToolEmail = tool(
+  ({email, content})=>{
+    return `Custom tool result: Email sent to ${email} with content: ${content}`;
+  },
+  {
+    name: "Email_tool",
+    description: "Use this tool to send an email with content",
+    schema: z.object({
+      email: z.string().email().describe("Sender email"),
+      content: z.string().describe("Email content"),
+    }),
+  }
+)
+
 const llModel = new ChatGoogle({
       apiKey: process.env.GEMINI_API_KEY,
       model: "gemini-3.5-flash-lite",
@@ -32,7 +62,7 @@ app.post("/chat", async (req, res) =>{
     
     const agent = createAgent({
       model: llModel,
-      tools: [tavilySearchTool],
+      tools: [tavilySearchTool, customToolAddition, customToolEmail],
     });
 
     const result = await agent.invoke({
